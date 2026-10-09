@@ -1,0 +1,25 @@
+# environment and caches
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# data is downloaded and built locally (quakerisk download / quakerisk build)
+data/raw/
+data/processed/
+
+# generated web page (built from web/template.html, style.css and app.js)
+web/index.html
+
+# validation: keep the scripts, the README and the result summaries, not the large inputs and OpenQuake files
+validation/*/*
+!validation/*/comparison.json
+!validation/*/comparison.png
+!validation/*/meta.json
+
+# local tooling
+.claude/
+
+# private notes
+notes/

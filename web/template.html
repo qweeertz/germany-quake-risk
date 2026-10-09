@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Germany Earthquake Risk</title>
+<script>try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
+<style>
+/*__STYLE__*/
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div>
+      <h1>Germany earthquake risk</h1>
+      <div class="sub">Building exposure (GEM, disaggregated to a 1&nbsp;km grid) and fictional earthquake scenarios.</div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button id="tabExposure" role="tab" aria-selected="true">Exposure</button>
+      <button id="tabScenario" role="tab" aria-selected="false">Scenario</button>
+    </div>
+
+    <div class="tab" id="tab-exposure">
+      <div class="kpis" id="kpis"></div>
+      <div>
+        <h2>Show</h2>
+        <div class="metrics" id="metrics"></div>
+        <div class="seg" id="occ" role="group" aria-label="Building type"></div>
+        <div class="note" id="note"></div>
+      </div>
+      <div>
+        <h2 id="legend-title">Legend</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div>
+        <h2>Bundesländer (click to zoom)</h2>
+        <table id="states"></table>
+      </div>
+    </div>
+
+    <div class="tab" id="tab-scenario" hidden>
+      <div class="hint" id="hint">Click on the map to place the epicentre (you can drag it afterwards), then adjust the earthquake below. Results update automatically.</div>
+      <div>
+        <h2>Earthquake</h2>
+        <select id="preset" aria-label="Example scenarios"></select>
+        <div class="field">
+          <label for="mag">Magnitude (Mw)</label><output id="o-mag">6.0</output>
+          <div class="rangewrap">
+            <input type="range" id="mag" min="4.5" max="8" step="0.1" value="6.0">
+            <span class="beyond"></span><span class="tick"></span><span class="ticklabel">M7 · end of the realistic range</span>
+          </div>
+          <div class="warn" id="magwarn" hidden>Beyond anything Germany's faults can produce (strongest known event: about M6, 1756). Treat the results as a thought experiment; the ground-motion models are only valid up to about M8.</div>
+        </div>
+        <label class="field">Depth of the hypocentre <output id="o-depth">10 km</output>
+          <input type="range" id="depth" min="2" max="25" step="1" value="10"></label>
+        <label class="field">Fault strike <output id="o-strike">135°</output>
+          <input type="range" id="strike" min="0" max="359" step="5" value="135"></label>
+        <select id="mech" aria-label="Fault type">
+          <option value="normal">Normal fault (Lower Rhine, Upper Rhine graben)</option>
+          <option value="strike-slip">Strike-slip fault (Swabian Alb)</option>
+          <option value="thrust">Thrust / reverse fault</option>
+        </select>
+        <select id="gmpe" aria-label="Ground-motion model">
+          <option value="ensemble">Ground motion: ensemble of 4 European models</option>
+          <option value="eshm20">Ground motion: ESHM20 (stronger shaking)</option>
+        </select>
+        <div class="status" id="status"></div>
+      </div>
+      <div id="results" hidden>
+        <div class="kpis2" id="kpis2"></div>
+        <div class="block">
+          <h2>Show on map</h2>
+          <div class="metrics" id="scmetrics"></div>
+        </div>
+        <div class="block">
+          <h2 id="sc-legend-title">Legend</h2>
+          <div class="legend" id="sc-legend"></div>
+        </div>
+        <div class="block"><h2>Damage to buildings</h2><div id="ch-grades"></div></div>
+        <div class="block"><h2>Loss by component</h2><div id="ch-comp"></div></div>
+        <div class="block"><h2>Loss by building type</h2><div id="ch-occ"></div></div>
+        <div class="block"><h2>Loss by Bundesland</h2><table id="ch-states"></table></div>
+      </div>
+    </div>
+
+    <div class="foot">
+      Values in US dollars (GEM 2025 replacement cost incl. contents). Hexagons: H3 res. 6 / 7, zoom to switch.
+      Commercial and industrial buildings are spread by population (proxy); residential uses Zensus 2022 building counts.
+      Scenario results are modelled order-of-magnitude estimates (global vulnerability functions, no site effects, night-time residents only), not forecasts.<br><br>
+      Data: GEM Global Exposure Model v2026.0.0 (Yepes-Estrada et al., 2026, CC BY-NC-SA 4.0) and Global Vulnerability Model (Nafeh et al., 2025);
+      Zensus 2022, Statistische Ämter des Bundes und der Länder (aggregated, modified);
+      © EuroGeographics for the administrative boundaries (Eurostat/GISCO NUTS 2021).
+    </div>
+  </aside>
+  <div id="map">
+    <button class="theme" id="theme" aria-label="Toggle colour theme">Theme</button>
+    <div class="tip" id="tip"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+<script>
+const DATA = /*__DATA__*/null;
+/*__SCRIPT__*/
+</script>
+</body>
+</html>

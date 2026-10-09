@@ -1,0 +1,126 @@
+{
+ "scenario": {
+  "lon": 6.5,
+  "lat": 50.8,
+  "mag": 5.8,
+  "depth": 10.0,
+  "strike": 135.0,
+  "dip": 60.0,
+  "rake": -90.0,
+  "vs30": 400.0
+ },
+ "events": 500,
+ "ground_motion": [
+  {
+   "imt": "PGA",
+   "sites": 85,
+   "mean_ln_diff": -4.89271962246985e-05,
+   "p95_abs_ln_diff": 0.052624776650529795,
+   "openquake_sigma": 0.6948127746582031,
+   "fast_engine_sigma": 0.7121053433306058
+  },
+  {
+   "imt": "SA(0.3)",
+   "sites": 85,
+   "mean_ln_diff": -0.03131392217657918,
+   "p95_abs_ln_diff": 0.08239742387530836,
+   "openquake_sigma": 0.7547316551208496,
+   "fast_engine_sigma": 0.7622903449473829
+  },
+  {
+   "imt": "SA(0.6)",
+   "sites": 85,
+   "mean_ln_diff": -0.009503512690521064,
+   "p95_abs_ln_diff": 0.05763970395763511,
+   "openquake_sigma": 0.7657740712165833,
+   "fast_engine_sigma": 0.7774348847331202
+  },
+  {
+   "imt": "SA(1.0)",
+   "sites": 85,
+   "mean_ln_diff": 0.004915303874062668,
+   "p95_abs_ln_diff": 0.062232095181146085,
+   "openquake_sigma": 0.7902523875236511,
+   "fast_engine_sigma": 0.7849243148227733
+  }
+ ],
+ "totals": {
+  "structural": {
+   "fast_engine": 588950485.3859515,
+   "openquake": 574839744.0,
+   "ratio": 1.0245472612727897
+  },
+  "nonstructural": {
+   "fast_engine": 2812801306.5287952,
+   "openquake": 2737487360.0,
+   "ratio": 1.0275120709703642
+  },
+  "contents": {
+   "fast_engine": 279405879.59959364,
+   "openquake": 272023104.0,
+   "ratio": 1.0271402520265103
+  },
+  "occupants": {
+   "fast_engine": 118.82609485353836,
+   "openquake": 116.0350570678711,
+   "ratio": 1.0240534012409261
+  },
+  "economic_total": {
+   "fast_engine": 3681157671.5143404,
+   "openquake": 3584350208.0,
+   "ratio": 1.027008371921436,
+   "within_two_std_errors": true
+  }
+ },
+ "openquake_monte_carlo": {
+  "events": 500,
+  "mean": 3584349952.0,
+  "std_error": 78291819.46236983,
+  "relative_std_error": 0.02184268291623826,
+  "cv_between_events": 0.48841723799705505
+ },
+ "by_distance": [
+  {
+   "rjb_km": "0-10",
+   "cells": 371,
+   "fast_engine_usd": 2074529453.7020416,
+   "openquake_usd": 2008894848.0,
+   "ratio": 1.0326719966290847
+  },
+  {
+   "rjb_km": "10-20",
+   "cells": 776,
+   "fast_engine_usd": 628860594.2160978,
+   "openquake_usd": 611317120.0,
+   "ratio": 1.0286978290679931
+  },
+  {
+   "rjb_km": "20-40",
+   "cells": 2668,
+   "fast_engine_usd": 676135294.663199,
+   "openquake_usd": 668692864.0,
+   "ratio": 1.0111298191798843
+  },
+  {
+   "rjb_km": "40-70",
+   "cells": 5400,
+   "fast_engine_usd": 232027495.18443653,
+   "openquake_usd": 227336096.0,
+   "ratio": 1.0206364025202426
+  },
+  {
+   "rjb_km": "70-120",
+   "cells": 12946,
+   "fast_engine_usd": 65299863.36299422,
+   "openquake_usd": 63808864.0,
+   "ratio": 1.0233666495456528
+  },
+  {
+   "rjb_km": "120-400",
+   "cells": 9900,
+   "fast_engine_usd": 4304970.385571118,
+   "openquake_usd": 4299939.0,
+   "ratio": 1.0011701062668839
+  }
+ ]
+}
