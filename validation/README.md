@@ -51,3 +51,31 @@ Each run writes its inputs and results to `validation/<name>/` (`comparison.json
 the large input files are not). The OpenQuake datastores are kept in `~/oqdata/calc_<id>.hdf5`; the id is stored in
 `<name>/meta.json`. `run_validation.py --skip-openquake` re-runs only the loss engine for an existing case, for example
 after a code change.
+
+## Consistency check of the stochastic event set
+
+`validation/check_event_set.py` checks that the stochastic event set (20,000 simulated years, 100 ESHM20 logic-tree
+paths) reproduces the hazard of OpenQuake's classical PSHA. For 77 sites over Germany it sums the annual rate of exceeding
+a PGA level over all events, using the complete ESHM20 ground-motion tree (15 weighted branches of the Kotha et al. 2020
+model), the same Vs30 (800 m/s), site attenuation region, 3-sigma truncation and 200 km maximum distance as the classical
+reference (400 logic-tree samples).
+
+| Rupture treatment | Median ratio of PGA at 475 years | Ratio of exceedance rates at 0.02 / 0.06 / 0.12 g |
+|---|---|---|
+| Point (as ESHM20 models its sources) | 0.98 | 0.98 / 0.94 / 0.89 |
+| Finite (planar, random strike; as in the loss engine) | 1.05 | 1.07 / 1.10 / 1.12 |
+
+- Site by site the PGA at 475 years scatters by roughly -20 / +20 % (10th to 90th percentile), which is the sampling noise of
+  20,000 years (about 40 events at this level) plus that of the sampled classical reference.
+- OpenQuake's own ground-motion fields for the same event-set job, counted in the same way, match its classical result
+  within 8 % (ratios 0.92-1.06), so the event set itself is consistent with the source model.
+- The check found a mistake in the first version of the hazard code (the ESHM20 Kotha model needs the site's
+  "Vs30 measured" flag; setting it wrongly made the hazard 26-53 % too high). The flag is now taken from the site model.
+- The loss engine assumes an inferred (not measured) Vs30 for the 1 km cells, which gives the larger site-to-site
+  variability of the model; this is deliberate.
+- The finite-rupture treatment gives 5-12 % more hazard than the point treatment of ESHM20; this is a modelling choice of
+  the loss engine, not an error.
+
+Reproduce: `quakerisk eventset --years 20000 --samples 100 --name es20k`, a classical OpenQuake run with the same site model,
+then `python validation/check_event_set.py --events es20k --classical <calculation id>` (about 7 minutes).
+Results are in `validation/event_set_check/` (`summary.json`, `pga475_by_site.csv`, `comparison.png`).

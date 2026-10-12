@@ -66,6 +66,9 @@ class GroundMotionModel:
         epi_x, epi_y = self.to_3035.transform(lon, lat)
         radius_km = max(radius_km, 300 + length / 2)
         near = np.where(np.hypot(self.x - epi_x, self.y - epi_y) < radius_km * 1000)[0]
+        if len(near) == 0:  # epicentre too far from every cell
+            empty = np.zeros((len(IMTS), 0))
+            return near, np.zeros(0), empty, empty, surface
         mesh = Mesh(self.lon[near], self.lat[near])
         hypocenter = Point(lon, lat, depth)
         n = len(near)

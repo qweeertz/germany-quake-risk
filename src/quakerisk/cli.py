@@ -1,6 +1,7 @@
 """Command line interface: `quakerisk <command>` (or `python -m quakerisk <command>`)."""
 import argparse
 import json
+import os
 
 STEPS = ("exposure", "vulnerability", "engine", "web")
 
@@ -29,9 +30,23 @@ def main(argv=None):
     for step in STEPS:
         sub.add_parser(step, help=f"run only the '{step}' step of the pipeline")
 
-    p = sub.add_parser("serve", help="start the dashboard at http://localhost:8000")
+    p = sub.add_parser("eventset", help="sample a stochastic event set from the ESHM20 source model (OpenQuake)")
+    p.add_argument("--years", type=int, default=20000, help="simulated years (a multiple of --samples)")
+    p.add_argument("--samples", type=int, default=100, help="logic-tree paths; each simulates years/samples years")
+    p.add_argument("--name", default="eventset")
+
+    p = sub.add_parser("eventlosses", help="loss of every event of an event set (event loss table)")
+    p.add_argument("--name", default="eventset")
+    p.add_argument("--gmpe", choices=["ensemble", "eshm20"], default="ensemble")
+    p.add_argument("--workers", type=int, default=None)
+
+    p = sub.add_parser("riskmetrics", help="average annual loss and exceedance curves from an event loss table")
+    p.add_argument("--name", default="eventset")
+    p.add_argument("--gmpe", choices=["ensemble", "eshm20"], default="ensemble")
+
+    p = sub.add_parser("serve", help="start the dashboard (default http://localhost:8000, or the port in $PORT)")
     p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
 
     p = sub.add_parser("scenario", help="run one scenario and print the summary as JSON")
     p.add_argument("--lon", type=float, required=True)
@@ -54,6 +69,15 @@ def main(argv=None):
             _run_step(step)
     elif args.command in STEPS:
         _run_step(args.command)
+    elif args.command == "eventset":
+        from .eventset import generate
+        generate(args.years, args.samples, args.name)
+    elif args.command == "eventlosses":
+        from .eventloss import compute
+        compute(args.name, args.gmpe, args.workers)
+    elif args.command == "riskmetrics":
+        from .riskmetrics import compute
+        compute(args.name, args.gmpe)
     elif args.command == "serve":
         from .server import serve
         serve(args.host, args.port)

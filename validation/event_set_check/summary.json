@@ -1,0 +1,29 @@
+{
+ "events": 20216,
+ "years": 20000,
+ "sites": 77,
+ "sites_compared": 49,
+ "classical_openquake_calculation": 11,
+ "point": {
+  "median_ratio_475yr_pga": 0.977441626442085,
+  "median_ratio_sites_above_0.02g": 0.9506309389143717,
+  "p10_p90_ratio_sites_above_0.02g": [
+   0.7719824290076074,
+   1.2026959939625712
+  ],
+  "rate_ratio_at_pga_0.019g": 0.9821173763466554,
+  "rate_ratio_at_pga_0.056g": 0.9417896876994498,
+  "rate_ratio_at_pga_0.115g": 0.8931849426248107
+ },
+ "finite": {
+  "median_ratio_475yr_pga": 1.0465701033422965,
+  "median_ratio_sites_above_0.02g": 1.0418330340547877,
+  "p10_p90_ratio_sites_above_0.02g": [
+   0.8699225078194143,
+   1.3193758698345586
+  ],
+  "rate_ratio_at_pga_0.019g": 1.068602127559415,
+  "rate_ratio_at_pga_0.056g": 1.0979536540312456,
+  "rate_ratio_at_pga_0.115g": 1.1235922696356202
+ }
+}

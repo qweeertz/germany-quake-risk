@@ -90,6 +90,8 @@ class QuakeEngine:
         out = np.zeros((len(LOSS_CATEGORIES) + len(GRADE_THRESHOLDS), n_cells, n_functions))
         step = LN_MEDIAN_GRID[1] - LN_MEDIAN_GRID[0]
         for j in range(len(IMTS)):
+            if n_cells == 0:  # no cell is shaken enough to cause loss
+                break
             members, table = self._table(j, float(np.mean(sigma[j])))
             if not members:
                 continue
@@ -189,6 +191,14 @@ class Result:
         return {"ids": grouped.index.tolist(), "mmi": grouped.mmi.round(2).tolist(), "pga": grouped.pga.round(4).tolist(),
                 "loss": (grouped.loss / 1e6).round(3).tolist(), "fat": grouped.fat.round(3).tolist(),
                 "value": (grouped.value / 1e6).round(1).tolist()}
+
+    def totals(self):
+        """Scalar totals of the scenario (cheap; used for event loss tables of many events)."""
+        loss = {o: float(sum(self.results[o][k].sum() for k in ("structural", "nonstructural", "contents")))
+                for o in OCCUPANCIES}
+        return {"loss": sum(loss.values()), **{f"loss_{o}": v for o, v in loss.items()},
+                "fatalities": float(self.results["res"]["fatalities"].sum()), "n_cells": int(len(self.cells)),
+                "max_pga_g": float(self.ground_motion[0].max()) if len(self.cells) else 0.0}
 
     def summary(self):
         table = self.cell_table()

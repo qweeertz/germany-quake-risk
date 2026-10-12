@@ -7,6 +7,8 @@ Sources
   * Eurostat / GISCO NUTS 2021 boundaries (reduced to the German federal states)
   * BKG CORINE Land Cover 5 ha (CLC5) 2018, only the industrial polygons (WFS query with a class filter, about 40 MB;
     the full product is a 1-3 GB download)
+  * ESHM20 OpenQuake input files for the main region (about 40 MB; CC BY 4.0, cite Danciu et al. 2021,
+    https://doi.org/10.12686/a15 and https://doi.org/10.12686/eshm20-oq-input), pinned to a commit of the EFEHR repository
 """
 import io
 import json
@@ -15,12 +17,17 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from .paths import CLC_INDUSTRIAL, GEM_RAW, STATES_GEOJSON, VULNERABILITY_FILES, ZENSUS_RAW
+from .paths import CLC_INDUSTRIAL, ESHM20_RAW, GEM_RAW, STATES_GEOJSON, VULNERABILITY_FILES, ZENSUS_RAW
 
 GEM_EXPOSURE = "https://raw.githubusercontent.com/gem/global_exposure_model/v2026.0.0/Europe/Germany/summaries/"
 GEM_VULNERABILITY = "https://raw.githubusercontent.com/gem/global_vulnerability_model/v2026.0.0/Europe/Germany/"
 ZENSUS = "https://www.destatis.de/static/DE/zensus/gitterdaten/"
 NUTS1 = "https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_01M_2021_4326_LEVL_1.geojson"
+
+ESHM20_API = "https://gitlab.seismo.ethz.ch/api/v4/projects/efehr%2Feshm20/repository/"
+ESHM20_COMMIT = "fbd334de68f85d72669f73fc5a314a113db67317"  # master on 2025-12-05; the OpenQuake inputs date from 2024
+ESHM20_MAIN = "oq_computational/oq_configuration_eshm20_v12e_region_main"
+ESHM20_MARKER = "config_eshm20_v12e_main_region.ini"
 
 CLC_WFS = "https://sg.geodatenzentrum.de/wfs_clc5_2018"
 CLC_CLASSES = ("121", "123", "124")  # industrial or commercial units, port areas, airports
@@ -76,6 +83,18 @@ def _fetch_clc_industrial():
     print(f"  {len(polygons)} industrial polygons")
 
 
+def _fetch_eshm20():
+    """ESHM20 main-region OpenQuake inputs (configuration, logic trees, source models) from the EFEHR GitLab repository."""
+    listing = (f"{ESHM20_API}tree?path={urllib.parse.quote(ESHM20_MAIN, safe='')}&recursive=true&per_page=200"
+               f"&ref={ESHM20_COMMIT}")
+    files = [f["path"] for f in json.loads(_fetch(listing)) if f["type"] == "blob"]
+    for path in files:
+        target = ESHM20_RAW / path[len(ESHM20_MAIN) + 1:]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(_fetch(f"{ESHM20_API}files/{urllib.parse.quote(path, safe='')}/raw?ref={ESHM20_COMMIT}"))
+    print(f"  {len(files)} files")
+
+
 def download(force: bool = False) -> None:
     print("GEM exposure and vulnerability")
     for name in ("Exposure_Summary_Adm1.csv", "Exposure_Summary_Taxonomy.csv"):
@@ -100,4 +119,7 @@ def download(force: bool = False) -> None:
     print("CORINE land cover (industrial polygons)")
     if _needs(CLC_INDUSTRIAL, force):
         _fetch_clc_industrial()
+    print("ESHM20 hazard model inputs (main region)")
+    if _needs(ESHM20_RAW / ESHM20_MARKER, force):
+        _fetch_eshm20()
     print("done")
