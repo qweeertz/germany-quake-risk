@@ -39,3 +39,11 @@ def test_every_exposure_class_is_mapped_to_a_vulnerability_function():
 def test_taxonomy_parser():
     parsed = parse_taxonomy("MUR+CL/LWAL/CDN+ERN/H:2/RES")
     assert parsed["family"] == "MUR" and parsed["design"] == 0 and parsed["storeys"] == 2 and parsed["occupancy"] == "RES"
+
+
+def test_industrial_buildings_follow_industrial_land():
+    cells = pd.read_parquet(PROCESSED / "cells.parquet")
+    on_industrial_land = cells.loc[cells.ind_land_m2 > 0, "ind_bldg"].sum()
+    assert on_industrial_land >= 0.89 * cells.ind_bldg.sum()  # 90 % follow the land, 10 % a population baseline
+    assert cells.ind_land_m2.max() <= 1e6 + 1  # never more than one square kilometre in a 1 km cell
+    assert 5e9 < cells.ind_land_m2.sum() < 8e9  # about 6,300 km2 of CORINE industrial land lie in the grid cells

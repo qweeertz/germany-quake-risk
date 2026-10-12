@@ -73,7 +73,7 @@ const OCCUPANCY_NOTES = {
   all: "",
   res: "Residential: Zensus 2022 building counts per 1 km cell, scaled to GEM state totals.",
   com: "Commercial: GEM state totals spread by population (weighted towards cities). A proxy, not observed locations.",
-  ind: "Industrial: GEM state totals spread by population. A proxy, not observed locations; land-use data would improve this.",
+  ind: "Industrial: GEM state totals spread by the industrial land of CORINE Land Cover (CLC5 2018), plus a small population baseline. Not observed building locations.",
 };
 const metricKey = () => MEASURES[measure].keys[occupancy];
 

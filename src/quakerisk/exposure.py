@@ -3,7 +3,8 @@
 Residential buildings: the Zensus counts per cell (by construction decade and building type) give the spatial pattern;
 they are scaled to the GEM totals per state. GEM building classes (taxonomies) are assigned to the cells by iterative
 proportional fitting (raking), so that the national class mix per settlement type reproduces GEM exactly.
-Commercial and industrial buildings: the GEM state totals are spread with a population-based proxy.
+Commercial buildings: the GEM state totals are spread with a population-based proxy. Industrial buildings: the GEM state
+totals are spread by the industrial land of CORINE Land Cover (CLC5 2018) in each cell, plus a small population baseline.
 
 Outputs in data/processed:
   cells.parquet         one row per 1 km cell with the exposure per occupancy
@@ -17,9 +18,10 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
+import shapely
 from pyproj import Transformer
 
-from .paths import GEM_RAW, PROCESSED, STATES_GEOJSON, ZENSUS_RAW
+from .paths import CLC_INDUSTRIAL, GEM_RAW, PROCESSED, STATES_GEOJSON, ZENSUS_RAW
 
 NUTS1_TO_ISO = {"DE1": "DE-BW", "DE2": "DE-BY", "DE3": "DE-BE", "DE4": "DE-BB", "DE5": "DE-HB", "DE6": "DE-HH",
                 "DE7": "DE-HE", "DE8": "DE-MV", "DE9": "DE-NI", "DEA": "DE-NW", "DEB": "DE-RP", "DEC": "DE-SL",
@@ -51,6 +53,9 @@ HEIGHT_CLASSES = {"1": 0, "2": 1, "3-5": 2, ">5": 3, "5-8": 3}
 HEIGHT_MISMATCH = 0.05  # prior weight for a class whose height differs from the cell's building type
 # Relative commercial building density by settlement type (assumption, to be replaced by land-use data).
 COM_FACTOR = {"BIG_CITY": 2.0, "URBAN": 1.0, "RURAL": 0.6}
+# Share of the industrial buildings of a state that is spread by population instead of by industrial land: small sites
+# below the 5 ha mapping limit of CORINE (assumption).
+INDUSTRIAL_BASELINE = 0.10
 SETTLEMENTS = ["BIG_CITY", "URBAN", "RURAL"]
 
 
@@ -224,12 +229,31 @@ def add_costs(cells, matrix, taxa, res_tax, gem_res):
     return avg_cost
 
 
+def industrial_land_area(cells):
+    """Area in m2 of industrial land inside each 1 km cell: CORINE CLC5 2018 classes 121 (industrial or commercial
+    units), 123 (port areas) and 124 (airports)."""
+    polygons = gpd.read_parquet(CLC_INDUSTRIAL).to_crs(3035)
+    geometry = shapely.make_valid(polygons.geometry.to_numpy())
+    x, y = cells["x"].to_numpy(), cells["y"].to_numpy()  # cell centres in EPSG:3035
+    squares = shapely.box(x - 500, y - 500, x + 500, y + 500)
+    polygon_index, cell_index = shapely.STRtree(squares).query(geometry, predicate="intersects")
+    overlap = shapely.area(shapely.intersection(geometry[polygon_index], squares[cell_index]))
+    return np.bincount(cell_index, weights=overlap, minlength=len(cells))
+
+
 def add_commercial_industrial(cells, adm1):
-    """Spread the GEM state totals of commercial and industrial buildings with a population-based proxy."""
+    """Spread the GEM state totals of commercial and industrial buildings over the cells of each state."""
+    cells["ind_land_m2"] = industrial_land_area(cells)
+    population = cells["pop_f"] * cells["settlement"].map(COM_FACTOR)
+    by_state = cells["state"]
     for occupancy, key in (("COM", "com"), ("IND", "ind")):
         gem = adm1[adm1["OCCUPANCY"] == occupancy].set_index("ID_1")
-        weight = cells["pop_f"] * (cells["settlement"].map(COM_FACTOR) if occupancy == "COM" else 1.0)
-        share = weight / weight.groupby(cells["state"]).transform("sum")
+        if occupancy == "COM":
+            share = population / population.groupby(by_state).transform("sum")
+        else:  # industrial land (CORINE) plus a population baseline for small sites
+            plain = cells["pop_f"] / cells["pop_f"].groupby(by_state).transform("sum")
+            land = cells["ind_land_m2"] / cells["ind_land_m2"].groupby(by_state).transform("sum")
+            share = INDUSTRIAL_BASELINE * plain + (1 - INDUSTRIAL_BASELINE) * land.fillna(plain)
         cells[f"{key}_bldg"] = share * cells["state"].map(gem["BUILDINGS"])
         cells[f"{key}_bldg_cost"] = share * cells["state"].map(gem["BLDG_REPL_COST_USD"])
         cells[f"{key}_contents_cost"] = share * cells["state"].map(gem["COST_CONTENTS_USD"])
@@ -280,7 +304,7 @@ def build():
 
     keep = ["id", "x", "y", "lon", "lat", "state", "settlement", "pop", "pop_f", "res_bldg", "res_bldg_cost",
             "res_contents_cost", "res_occupants", "res_area_sqm", "com_bldg", "com_bldg_cost", "com_contents_cost",
-            "com_area_sqm", "ind_bldg", "ind_bldg_cost", "ind_contents_cost", "ind_area_sqm"]
+            "com_area_sqm", "ind_bldg", "ind_bldg_cost", "ind_contents_cost", "ind_area_sqm", "ind_land_m2"]
     cells[keep].to_parquet(PROCESSED / "cells.parquet", index=False)
     sp.save_npz(PROCESSED / "cell_taxonomy.npz", matrix)
     (PROCESSED / "taxonomies.json").write_text(json.dumps({

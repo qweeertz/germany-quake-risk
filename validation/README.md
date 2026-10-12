@@ -31,6 +31,9 @@ inputs:
 - The validation found an error in the first version of the quadrature (variability clipped instead of truncated at
   3 sigma, about 6 % too high); it was corrected before the figures above.
 
+Note: the two cases were computed before the industrial layer used CORINE land cover (the exposure of industrial
+buildings has changed since). The comparison validates the loss calculation, which did not change.
+
 ## Reproduce
 
 OpenQuake needs the package versions pinned in `pyproject.toml` (in particular pandas 2.2 and numba 0.61); it runs without

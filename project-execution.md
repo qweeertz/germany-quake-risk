@@ -6,7 +6,7 @@ For what the project is and how to run it, see [README.md](README.md).
 **Plan:** GEM exposure of Germany -> disaggregate to a 1 km grid -> hazard (OpenQuake hazardlib GMPEs) and vulnerability
 -> fast loss engine and API (FastAPI) -> single-page map dashboard. Steps: 1 environment check, 2 inspect the GEM data,
 3 disaggregated exposure map, 4 loss engine, 5 interactive dashboard, 6 validation against the OpenQuake engine,
-7 cleanup and packaging.
+7 cleanup and packaging, 8 industrial land from CORINE.
 
 ## Step 1: environment
 - Windows, Python 3.12 virtual environment. `pip install openquake.engine` fails on Windows because GDAL needs a C++
@@ -39,8 +39,8 @@ Downloaded by `quakerisk download`.
   construction decade (seismic design level, material; first German seismic code DIN 4149 in 1957, revised 1981 and 2005)
   and the Zensus building type (number of storeys); the margins reproduce the GEM class counts exactly.
 - Commercial and industrial buildings: the Zensus covers only buildings with dwellings, so the GEM state totals are
-  spread by population (commercial weighted 2.0 / 1.0 / 0.6 by settlement type). Planned refinement: CORINE land cover for
-  industry.
+  spread differently. Commercial: by population (weighted 2.0 / 1.0 / 0.6 by settlement type). Industrial: by the
+  industrial land of CORINE Land Cover (step 8), with a 10 % population baseline.
 - Residential occupants from the Zensus population, scaled to the GEM state totals.
 
 **Limitations.** Commercial and industrial buildings have one national class mix (not per cell); GEM gives no
@@ -106,6 +106,24 @@ it), django below 5, geopandas 1.1.x and decorator 5.1.x; these pins are in `pyp
 - A regression check confirmed that the refactoring changed no numbers (cells, class matrix, mapping and three scenarios
   identical to the previous version).
 
+## Step 8: industrial land from CORINE
+- **Why:** industry is about 27 % of the replacement value, and spreading it by population puts factories where people
+  live.
+- **Source:** CORINE Land Cover 5 ha, status 2018 (CLC5 2018) from the German mapping agency BKG: free, Datenlizenz
+  Deutschland - Namensnennung 2.0. The full product is a 1.2-3.3 GB Shapefile download. Instead `quakerisk download` queries
+  the BKG web feature service with a class filter (classes 121 industrial or commercial units, 123 port areas, 124
+  airports): 33,342 polygons, about 40 MB over the network, stored as a 69 MB GeoParquet file. (The EU version of CORINE has a
+  25 ha mapping unit and, as far as we found, needs an EU account.)
+- **Use:** for each 1 km cell the area of industrial land is computed (polygon intersection in EPSG:3035); the GEM state
+  totals of industrial buildings, values and floor area are spread by it, with a baseline of 10 % spread by population for
+  small sites below the 5 ha mapping limit (assumption).
+- **Effect:** the state totals are unchanged; half of the industrial value now sits in 8,560 cells instead of 10,618.
+  Scenario losses change little (industry is about 6 % of the loss), but their spatial pattern is more realistic.
+- **Limitation:** about 645 km2 of the 6,929 km2 of industrial land (9 %) lie in cells without residents, which the
+  census-based grid does not contain; that land gets no weight (airports, ports and large plants outside settlements).
+  The validation cases (step 6) were computed with the earlier population-based industrial distribution; they validate the
+  calculation, which did not change.
+
 ## Attribution and licences
 - **Exposure model:** Yepes-Estrada, C. et al. (2026), *Global Exposure Model* (v2026.0.0), GEM Foundation.
   <https://doi.org/10.5281/zenodo.8117363>. Licence CC BY-NC-SA 4.0 (<https://creativecommons.org/licenses/by-nc-sa/4.0/>);
@@ -115,5 +133,7 @@ it), django below 5, geopandas 1.1.x and decorator 5.1.x; these pins are in `pyp
 - **Census grid data:** Source: Statistische Ämter des Bundes und der Länder, Zensus 2022 (<https://www.zensus2022.de>).
   Aggregated and modified in this project. The exact licence text of the grid download was not verified; Destatis
   publishes related products under Datenlizenz Deutschland - Namensnennung 2.0.
+- **Land cover:** CORINE Land Cover 5 ha, status 2018, (c) Bundesamt für Kartographie und Geodäsie (BKG), Datenlizenz
+  Deutschland - Namensnennung 2.0 (<https://www.govdata.de/dl-de/by-2-0>); industrial polygons only, aggregated and modified.
 - **Administrative boundaries:** (c) EuroGeographics for the administrative boundaries; Eurostat / GISCO NUTS 2021
   (<https://ec.europa.eu/eurostat/web/gisco>). Non-commercial use with attribution.

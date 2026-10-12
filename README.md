@@ -39,7 +39,8 @@ flowchart LR
 1. **Exposure** (`quakerisk.exposure`): GEM publishes the exposure of Germany only per federal state. It is spread to
    the Zensus 1 km cells: residential buildings follow the census counts by construction decade and building type;
    GEM's 77 residential building classes are assigned per cell by iterative proportional fitting, so the national class mix
-   is reproduced exactly. Commercial and industrial buildings (not in the census grid) are spread by population.
+   is reproduced exactly. Commercial and industrial buildings are not in the census grid: industrial ones are spread by the
+   industrial land of CORINE Land Cover, commercial ones by population.
 2. **Vulnerability** (`quakerisk.vulnerability`): the 169 exposure classes are mapped to GEM's 82 vulnerability functions
    by attribute distance (material, structural system, seismic design level, ductility, height).
 3. **Hazard** (`quakerisk.hazard`): a finite rupture and the ground motion (PGA, SA at 0.3 / 0.6 / 1.0 s) of an ensemble
@@ -52,7 +53,7 @@ More detail, assumptions and decisions are in [project-execution.md](project-exe
 
 ## Quick start
 
-Requires Python 3.10-3.12 (developed and tested with 3.12 on Windows 11). About 100 MB of input data is downloaded; building takes a few minutes.
+Requires Python 3.10-3.12 (developed and tested with 3.12 on Windows 11). About 150 MB of input data is stored (the industrial land is fetched with a filtered web query of about 40 MB); building takes a few minutes.
 
 ```bash
 python -m venv .venv
@@ -60,7 +61,7 @@ python -m venv .venv
 pip install -e .
 pip install openquake.engine==3.26.2 --no-deps    # hazard library; its GDAL dependency is not needed
 
-quakerisk download                # GEM data, Zensus 2022 grid tables, state boundaries -> data/raw
+quakerisk download                # GEM data, Zensus 2022 grid tables, state boundaries, industrial land -> data/raw
 quakerisk build                   # exposure -> vulnerability mapping -> engine data -> web page
 quakerisk serve                   # dashboard at http://localhost:8000
 ```
@@ -126,8 +127,9 @@ This is a modelling exercise, not a risk assessment.
 - **Order-of-magnitude estimates.** For the 1978 Albstadt earthquake (M5.7) the model gives about USD 2 billion and about
   100 fatalities, whereas the real event caused far less damage and no deaths. The scenarios are useful for comparing
   events, not as forecasts. Germany's strongest known earthquakes are around M6; the dashboard warns above M7.
-- **Disaggregation.** GEM's finer exposure is not public, so the spatial distribution is modelled. Commercial and
-  industrial buildings are spread by population (a proxy) and share one national class mix.
+- **Disaggregation.** GEM's finer exposure is not public, so the spatial distribution is modelled. Commercial buildings
+  are spread by population (a proxy). Industrial buildings follow CORINE industrial land, but about 9 % of that land lies
+  in cells without residents, which the census-based grid does not contain. Both share one national class mix.
 - **No fragility curves.** The public GEM data has only vulnerability functions; the damage grades are derived from the
   loss-ratio distribution.
 - **Assumptions.** Uniform soil (Vs30 = 400 m/s, no site effects); structural share of the building cost 30 % (residential)
@@ -144,6 +146,8 @@ Derived data in this project is non-commercial because the GEM data is licensed 
 - **Census grid data:** Statistische Ämter des Bundes und der Länder, Zensus 2022
   ([zensus2022.de](https://www.zensus2022.de)); aggregated and modified here.
 - **Boundaries:** © EuroGeographics for the administrative boundaries, Eurostat / GISCO NUTS 2021.
+- **Land cover:** CORINE Land Cover 5 ha, status 2018 (CLC5 2018), © Bundesamt für Kartographie und Geodäsie (BKG),
+  Datenlizenz Deutschland - Namensnennung 2.0; only the industrial polygons were used, aggregated and modified here.
 - **Hazard and risk software:** [OpenQuake engine and hazard library](https://github.com/gem/oq-engine), GEM Foundation
   (AGPL-3.0).
 - **Map components:** [MapLibre GL JS](https://maplibre.org/) and [h3-js](https://github.com/uber/h3-js), loaded from a CDN
