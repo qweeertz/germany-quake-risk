@@ -69,12 +69,54 @@ def _hexagons(cells, resolution, hex_ids):
     return {"ids": list(grouped.index), **{k: v.astype(float).tolist() for k, v in columns.items()}, "breaks": breaks}
 
 
+RISK_EVENT_SET = "es20k"
+RISK_MODELS = ("ensemble", "eshm20")
+
+
+def _risk(cells, hexagons, ids):
+    """Average annual loss per hexagon and state and the exceedance table, for the ground-motion models that were run."""
+    from .eventloss import aal_path
+    from .eventset import read_events
+    from .riskmetrics import metrics_path
+
+    models = {}
+    for gmpe in RISK_MODELS:
+        if not (aal_path(RISK_EVENT_SET, gmpe).exists() and metrics_path(RISK_EVENT_SET, gmpe).exists()):
+            continue
+        aal = pd.read_parquet(aal_path(RISK_EVENT_SET, gmpe))
+        metrics = json.loads(metrics_path(RISK_EVENT_SET, gmpe).read_text())
+        model = {"aal": metrics["aal_usd"], "aal_std_error": metrics["aal_std_error_usd"],
+                 "aal_by_occupancy": metrics["aal_by_occupancy_usd"], "return_periods": metrics["return_periods"]}
+        by_state = aal.groupby("state").aal.sum()
+        model["by_state"] = [{"state": k, "aal": float(v)} for k, v in by_state.items()]
+        for resolution in HEX_RESOLUTIONS:
+            index = pd.Index(ids[resolution])
+            loss = pd.Series(aal.aal.to_numpy()).groupby(hexagons[f"h{resolution}"]).sum().reindex(index).fillna(0.0)
+            value = pd.Series(cells.value.to_numpy()).groupby(hexagons[f"h{resolution}"]).sum().reindex(index)
+            per_million = 1e6 * loss / value.clip(lower=1.0)  # annual loss in USD per million USD of exposed value
+            breaks = {}
+            for key, series in (("aal", loss), ("rate", per_million)):
+                positive = series[series > 0]
+                breaks[key] = [float(v) for v in np.geomspace(np.quantile(positive, 0.10), np.quantile(positive, 0.995), 6)]
+            model[f"r{resolution}"] = {"aal": loss.round(0).astype(float).tolist(), "rate": per_million.round(2).tolist(),
+                                       "breaks": breaks}
+        models[gmpe] = model
+    if not models:
+        return None
+    events, meta = read_events(RISK_EVENT_SET)
+    return {"years": meta["years"], "events": int(len(events)), "models": models}
+
+
 def build():
     cells = _cell_columns()
     hexagons = np.load(HEX_FILE)
     data = {"keys": MAP_KEYS}
     for resolution in HEX_RESOLUTIONS:
         data[f"r{resolution}"] = _hexagons(cells, resolution, hexagons[f"h{resolution}"])
+
+    data["risk"] = _risk(cells, hexagons, {r: data[f"r{r}"]["ids"] for r in HEX_RESOLUTIONS})
+    if data["risk"]:
+        print(f"  risk layers for: {', '.join(data['risk']['models'])}")
 
     states = cells.groupby("state")[MAP_KEYS].sum().reset_index()
     states["name"] = states.state.map(STATE_NAMES)

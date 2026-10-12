@@ -7,7 +7,8 @@
 const $ = id => document.getElementById(id);
 const HEX_SPLIT_ZOOM = 7.2;          // below: H3 resolution 6 (~36 km2), above: resolution 7 (~5 km2)
 const GERMANY_BOUNDS = [[5.5, 47.1], [15.3, 55.2]];
-const API = location.port === "8000" ? "" : "http://localhost:8000";
+// The backend serves this page, so requests go to the same origin (any port); only a page opened from disk needs the default address.
+const API = location.protocol === "file:" ? "http://localhost:8000" : "";
 const ORANGE = "#eb6834", RED = "#d03b3b";
 
 // Sequential ramps (light -> dark), reversed on the dark theme so that high values are bright.
@@ -61,7 +62,8 @@ function rangeLabels(breaks, fmt) {
 // ===================================================================================================
 let measure = "value", occupancy = "all";   // exposure view
 let zoomLevel = 6;                          // current hexagon resolution
-let mode = "exposure", result = null;       // "exposure" | "scenario", last scenario result from the backend
+let mode = "exposure", result = null;       // "exposure" | "scenario" | "risk", last scenario result from the backend
+const risk = { model: "ensemble", layer: "aal" };
 
 const MEASURES = {
   value: { label: "Replacement value", fmt: v => fmtUSD(v * 1e6), keys: { all: "value", res: "vres", com: "vcom", ind: "vind" } },
@@ -137,16 +139,19 @@ function applyExposureMetric() {
   renderLegend();
   renderStateTable();
 }
-const renderLegend = () => (mode === "scenario" && result ? renderScenarioLegend() : renderExposureLegend());
+const renderLegend = () => (mode === "scenario" && result ? renderScenarioLegend()
+  : mode === "risk" ? renderRiskLegend() : renderExposureLegend());
 
 const exposureFeaturesBuilt = {};
 function buildExposureFeatures(res) {
   if (exposureFeaturesBuilt[res]) return;
   const d = DATA["r" + res];
   const properties = DATA.keys.concat(["cdn", "mur", "w", "cr"]);
+  const models = DATA.risk ? Object.keys(DATA.risk.models) : [];
   const features = d.ids.map((id, i) => ({
     type: "Feature", geometry: { type: "Polygon", coordinates: [hexRing(id)] },
-    properties: Object.fromEntries([["i", i], ...properties.map(k => [k, d[k][i]])]),
+    properties: Object.fromEntries([["i", i], ...properties.map(k => [k, d[k][i]]),
+      ...models.flatMap(m => [["aal_" + m, DATA.risk.models[m]["r" + res].aal[i]], ["rate_" + m, DATA.risk.models[m]["r" + res].rate[i]]])]),
   }));
   exposureFeaturesBuilt[res] = true;
   map.getSource("hex" + res).setData({ type: "FeatureCollection", features });
@@ -176,7 +181,7 @@ function paintTheme() {
   const css = getComputedStyle(document.documentElement);
   map.setPaintProperty("bg", "background-color", css.getPropertyValue("--map-bg").trim());
   if (map.getLayer("outline")) map.setPaintProperty("outline", "line-color", css.getPropertyValue("--outline").trim());
-  if (map.getLayer("hex6")) applyExposureMetric();
+  if (map.getLayer("hex6")) { if (mode === "risk") applyRiskColors(); else applyExposureMetric(); }
   if (result) applyScenarioColors();
 }
 
@@ -228,6 +233,13 @@ function setHover(feature) {
 function tooltipHtml(p) {
   const row = (label, value) => `<div class="r">${label} <em>${value}</em></div>`;
   const usd = v => fmtUSD(v * 1e6);
+  if (mode === "risk") {
+    const m = risk.model;
+    return `<b>${hexLabel(zoomLevel)}</b>` +
+      row("Average annual loss", fmtUSD(p["aal_" + m])) +
+      row("Annual loss per million USD of value", (+p["rate_" + m]).toFixed(1) + " USD") +
+      row("Replacement value", usd(p.value));
+  }
   if (mode === "scenario" && result) {
     return `<b>${hexLabel(zoomLevel)}</b>` +
       row("Shaking", `MMI ${toRoman(p.mmi)} · PGA ${(+p.pga).toFixed(2)} g`) +
@@ -307,9 +319,12 @@ function setMode(next) {
   mode = next;
   $("tabExposure").setAttribute("aria-selected", next === "exposure");
   $("tabScenario").setAttribute("aria-selected", next === "scenario");
+  $("tabRisk").setAttribute("aria-selected", next === "risk");
   $("tab-exposure").hidden = next !== "exposure";
   $("tab-scenario").hidden = next !== "scenario";
+  $("tab-risk").hidden = next !== "risk";
   const showResult = next === "scenario" && result;
+  if (map.getLayer("hex6")) { if (next === "risk") applyRiskColors(); else applyExposureMetric(); }
   [6, 7].forEach(r => {
     map.setPaintProperty("hex" + r, "fill-opacity", showResult ? 0.28 : 0.92);  // exposure stays faintly visible
     map.setLayoutProperty("scen" + r, "visibility", showResult ? "visible" : "none");
@@ -425,7 +440,64 @@ function initScenarioControls() {
   };
   $("tabExposure").onclick = () => setMode("exposure");
   $("tabScenario").onclick = () => setMode("scenario");
+  $("tabRisk").onclick = () => setMode("risk");
   map.on("click", e => { if (mode === "scenario") setEpicentre(e.lngLat.lng, e.lngLat.lat); });
+}
+
+// ===================================================================================================
+// Annual risk view (average annual loss and exceedance table from the stochastic event set)
+// ===================================================================================================
+const RISK_MODELS = { ensemble: "Ensemble of 4 European models", eshm20: "ESHM20 (stronger shaking)" };
+const RISK_LAYERS = {
+  aal:  { label: "Average annual loss", unit: " per hexagon and year", fmt: v => fmtUSD(v) },
+  rate: { label: "Annual loss per million USD of value", unit: "", fmt: v => (+v).toFixed(v < 10 ? 1 : 0) + " USD" },
+};
+const riskData = () => DATA.risk.models[risk.model];
+
+function applyRiskColors() {
+  [6, 7].forEach(r => {
+    if (!map.getLayer("hex" + r)) return;
+    const breaks = riskData()["r" + r].breaks[risk.layer];
+    map.setPaintProperty("hex" + r, "fill-color", stepExpression(risk.layer + "_" + risk.model, breaks, ramp(ORANGE_RAMP)));
+  });
+  renderLegend();
+}
+function renderRiskLegend() {
+  const layer = RISK_LAYERS[risk.layer], breaks = riskData()["r" + zoomLevel].breaks[risk.layer];
+  $("rk-legend-title").textContent = layer.label + (risk.layer === "aal" ? (zoomLevel === 6 ? " per ~36 km² hexagon" : " per ~5 km² hexagon") : "");
+  $("rk-legend").innerHTML = legendHtml(ramp(ORANGE_RAMP), rangeLabels(breaks, layer.fmt));
+}
+
+function renderRisk() {
+  const m = riskData(), by = rp => m.return_periods.find(r => r.return_period_years === rp);
+  $("rk-kpis").innerHTML =
+    kpi(fmtUSD(m.aal), "Average annual loss", `± ${fmtUSD(m.aal_std_error)} (sampling error)`) +
+    kpi(fmtUSD(by(100).oep_usd), "1-in-100-year loss", "largest event of a year") +
+    kpi(fmtUSD(by(500).oep_usd), "1-in-500-year loss", `± ${fmtUSD(by(500).oep_usd_std_error)}`) +
+    kpi(fmtUSD(by(1000).oep_usd), "1-in-1,000-year loss", `± ${fmtUSD(by(1000).oep_usd_std_error)}`);
+  $("rk-ep").innerHTML = m.return_periods.filter(r => r.reliable && r.return_period_years >= 10).map(r =>
+    `<tr><td class="n">${r.return_period_years.toLocaleString("en-US")} years</td><td class="b"></td>` +
+    `<td class="v">${fmtUSD(r.oep_usd)} ± ${fmtUSD(r.oep_usd_std_error)}</td></tr>`).join("");
+  $("rk-ep-note").textContent = "Largest single event in a year (± sampling error). Longer return periods need more simulated years.";
+  const names = Object.fromEntries(DATA.states.map(s => [s.state, s.name]));
+  const top = m.by_state.slice().sort((a, b) => b.aal - a.aal).slice(0, 8), max = top[0].aal;
+  $("rk-states").innerHTML = top.map(s =>
+    `<tr><td class="n">${names[s.state]}</td><td class="b"><div class="bar" style="width:${100 * s.aal / max}%"></div></td><td class="v">${fmtUSD(s.aal)}</td></tr>`).join("");
+  $("rk-hint").textContent = `Expected loss per year from ${DATA.risk.years.toLocaleString("en-US")} simulated years of earthquakes ` +
+    `(${DATA.risk.events.toLocaleString("en-US")} events near Germany) sampled from the ESHM20 source model. ` +
+    "Economic loss only: fatalities are not shown because the vulnerability model overestimates them for Germany.";
+}
+
+function initRiskControls() {
+  if (!DATA.risk) return;
+  $("tabRisk").hidden = false;
+  const models = Object.keys(DATA.risk.models);
+  if (!models.includes(risk.model)) risk.model = models[0];
+  $("rk-models").innerHTML = models.map(k => `<label><input type="radio" name="rkm" value="${k}" ${k === risk.model ? "checked" : ""}> ${RISK_MODELS[k]}</label>`).join("");
+  $("rk-models").querySelectorAll("input").forEach(i => i.onchange = () => { risk.model = i.value; renderRisk(); applyRiskColors(); });
+  $("rk-layers").innerHTML = Object.entries(RISK_LAYERS).map(([k, l]) => `<label><input type="radio" name="rkl" value="${k}" ${k === risk.layer ? "checked" : ""}> ${l.label}</label>`).join("");
+  $("rk-layers").querySelectorAll("input").forEach(i => i.onchange = () => { risk.layer = i.value; applyRiskColors(); });
+  renderRisk();
 }
 
 // ===================================================================================================
@@ -453,6 +525,7 @@ map.on("load", () => {
   map.on("mousemove", e => { if (!pendingMove) requestAnimationFrame(onMapMove); pendingMove = e; });
   map.on("mouseout", () => { pendingMove = null; tip.style.display = "none"; setHover(null); });
   initScenarioControls();
+  initRiskControls();
 });
 
 renderTotals();

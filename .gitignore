@@ -17,6 +17,9 @@ validation/*/*
 !validation/*/comparison.json
 !validation/*/comparison.png
 !validation/*/meta.json
+!validation/event_set_check/summary.json
+!validation/event_set_check/comparison.png
+!validation/event_set_check/pga475_by_site.csv
 
 # local tooling
 .claude/

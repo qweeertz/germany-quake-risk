@@ -10,6 +10,7 @@ full OpenQuake engine.
 
 ![Exposure view: replacement value of the buildings in Germany](docs/images/exposure.jpg)
 ![Scenario view: shaking and losses of an M6.1 earthquake near Düren](docs/images/scenario.jpg)
+![Annual risk view: average annual loss per hexagon from 20,000 simulated years](docs/images/risk.jpg)
 
 ## What it does
 
@@ -18,7 +19,11 @@ full OpenQuake engine.
 - **Scenario dashboard.** Click the map to set the epicentre (and drag it), pick magnitude (4.5-8), depth, strike and fault
   type, and see shaking intensity, economic loss, loss ratio and fatalities per hexagon, plus damage grades and losses by
   component, building type and federal state. Six example scenarios are included.
-- **Command line.** `quakerisk scenario ...` prints the same results as JSON.
+- **Annual risk.** A stochastic event set of 20,000 simulated years is sampled from the ESHM20 source model with
+  OpenQuake and run through the loss engine. The dashboard shows the average annual loss per hexagon and federal
+  state and the loss that is exceeded once in 100, 500 and 1,000 years, for two ground-motion models.
+- **Command line.** `quakerisk scenario ...` prints the scenario results as JSON; `quakerisk eventset`,
+  `eventlosses` and `riskmetrics` run the probabilistic risk pipeline.
 
 ## How it works
 
@@ -47,7 +52,11 @@ flowchart LR
    of four European GMPEs at every cell. The ESHM20 model is available as a stronger-shaking option.
 4. **Loss** (`quakerisk.engine`): expected loss ratios per vulnerability function, integrated over the ground-motion
    variability (truncated at 3 sigma), give structural, non-structural and contents losses, fatalities and damage grades.
-5. **Dashboard** (`quakerisk.server`, `web/`): a FastAPI backend and a single-page MapLibre front end.
+5. **Annual risk** (`quakerisk.eventset`, `eventloss`, `riskmetrics`): OpenQuake samples a stochastic event set from
+   the ESHM20 source model (area, smoothed-seismicity and fault sources, 100 logic-tree paths); every event near
+   Germany is run through the loss engine in parallel. The event loss table gives the average annual loss and the
+   exceedance curves; losses are also accumulated per 1 km cell for the map.
+6. **Dashboard** (`quakerisk.server`, `web/`): a FastAPI backend and a single-page MapLibre front end.
 
 More detail, assumptions and decisions are in [project-execution.md](project-execution.md).
 
@@ -75,6 +84,16 @@ quakerisk scenario --lon 6.5 --lat 50.8 --mag 6.0 --depth 10 --strike 135
 On Windows, keep the project in a short path (or enable long paths): installing `openquake.engine` fails when the
 virtual environment lies in a deeply nested folder.
 
+The annual-risk results need two more commands (about 2 minutes for the event set and 10 minutes per ground-motion
+model on 16 cores), after which `quakerisk web` adds the risk tab to the page:
+
+```bash
+quakerisk eventset --years 20000 --samples 100 --name es20k   # ESHM20 event set (needs the OpenQuake engine)
+quakerisk eventlosses --name es20k --gmpe ensemble            # loss of every event; also --gmpe eshm20
+quakerisk riskmetrics --name es20k --gmpe ensemble            # average annual loss, exceedance curves
+quakerisk web
+```
+
 `quakerisk build` runs four steps that can also be run one at a time: `quakerisk exposure`, `quakerisk vulnerability`,
 `quakerisk engine`, `quakerisk web`. Opening `web/index.html` without the backend still shows the exposure map.
 
@@ -96,6 +115,9 @@ src/quakerisk/
   hazard.py          rupture, ground-motion models, shaking intensity
   engine_data.py     exposure matrices (cell x vulnerability function) for the engine
   engine.py          scenario loss engine
+  eventset.py        stochastic event set from the ESHM20 source model (OpenQuake)
+  eventloss.py       loss of every event of an event set, per-cell average annual loss
+  riskmetrics.py     average annual loss and exceedance curves
   webdata.py         hexagon aggregation and assembly of web/index.html
   server.py          FastAPI backend
   cli.py             the `quakerisk` command
@@ -117,6 +139,9 @@ The loss engine was compared with the OpenQuake engine (`scenario_risk`) on iden
 | Munich, M5.5, 8 km depth | USD 7.23 bn | USD 7.37 bn | 1.02 | 2.6 % |
 
 Median ground motion agrees within 4 %, per-cell losses lie on the 1:1 line. See [validation/README.md](validation/README.md).
+The stochastic event set was checked against OpenQuake's classical PSHA: with the full ESHM20 ground-motion tree the
+exceedance rates agree within about 10 % (point ruptures, as ESHM20 models its sources) and the PGA with a 475-year
+return period within 2 % (median over sites).
 This validates the calculation, not the inputs: the exposure disaggregation, the class mapping and the vulnerability
 model themselves are not checked against observed damage.
 
@@ -130,6 +155,11 @@ This is a modelling exercise, not a risk assessment.
 - **Disaggregation.** GEM's finer exposure is not public, so the spatial distribution is modelled. Commercial buildings
   are spread by population (a proxy). Industrial buildings follow CORINE industrial land, but about 9 % of that land lies
   in cells without residents, which the census-based grid does not contain. Both share one national class mix.
+- **Annual risk.** The average annual loss is about USD 194 million (ensemble ground motion) to 244 million (ESHM20),
+  from 20,000 simulated years; the 1-in-500-year loss is about USD 14-17 billion. These are model results that have
+  not been compared with published figures. Only the central branch of ESHM20's ground-motion tree is used for the
+  losses, ESHM20 gives no fault orientation for its point sources (a random strike is drawn), and expected fatalities
+  (about 8-10 per year) are far too high compared with the historical record, so the dashboard shows only economic loss.
 - **No fragility curves.** The public GEM data has only vulnerability functions; the damage grades are derived from the
   loss-ratio distribution.
 - **Assumptions.** Uniform soil (Vs30 = 400 m/s, no site effects); structural share of the building cost 30 % (residential)
@@ -146,6 +176,10 @@ Derived data in this project is non-commercial because the GEM data is licensed 
 - **Census grid data:** Statistische Ämter des Bundes und der Länder, Zensus 2022
   ([zensus2022.de](https://www.zensus2022.de)); aggregated and modified here.
 - **Boundaries:** © EuroGeographics for the administrative boundaries, Eurostat / GISCO NUTS 2021.
+- **Seismic hazard model:** Danciu, L. et al. (2021), *The 2020 update of the European Seismic Hazard Model: Model
+  Overview*, EFEHR Technical Report 001, [doi:10.12686/a15](https://doi.org/10.12686/a15); OpenQuake input files:
+  [doi:10.12686/eshm20-oq-input](https://doi.org/10.12686/eshm20-oq-input), CC BY 4.0. Downloaded from the EFEHR repository
+  (<https://gitlab.seismo.ethz.ch/efehr/eshm20>), not redistributed here.
 - **Land cover:** CORINE Land Cover 5 ha, status 2018 (CLC5 2018), © Bundesamt für Kartographie und Geodäsie (BKG),
   Datenlizenz Deutschland - Namensnennung 2.0; only the industrial polygons were used, aggregated and modified here.
 - **Hazard and risk software:** [OpenQuake engine and hazard library](https://github.com/gem/oq-engine), GEM Foundation

@@ -137,3 +137,36 @@ it), django below 5, geopandas 1.1.x and decorator 5.1.x; these pins are in `pyp
   Deutschland - Namensnennung 2.0 (<https://www.govdata.de/dl-de/by-2-0>); industrial polygons only, aggregated and modified.
 - **Administrative boundaries:** (c) EuroGeographics for the administrative boundaries; Eurostat / GISCO NUTS 2021
   (<https://ec.europa.eu/eurostat/web/gisco>). Non-commercial use with attribution.
+
+## Step 8: probabilistic risk (stochastic event set)
+**Goal.** From "what if this earthquake happens" to "how much loss per year, and how often is a given loss exceeded".
+
+**Source model.** ESHM20 (EFEHR GitLab repository, pinned to a commit; CC BY 4.0, cite Danciu et al. 2021): area, smoothed-seismicity
+and fault source models with a logic tree. The main-region OpenQuake inputs are 39 MB. They ran unchanged on OpenQuake 3.26
+(a first classical test with 461 sites and 100 logic-tree samples took 2 minutes). Its ground-motion logic tree is 15 weighted
+branches of the Kotha et al. 2020 model (5 stress levels x 3 attenuation levels).
+
+**Event set** (`eventset.py`). OpenQuake `event_based` samples 100 logic-tree paths of 200 years each (20,000 years in 2 minutes) with
+ground-motion fields off; this does not filter by distance, so we keep the 20,216 events within 150 / 300 / 400 km of Germany
+(by magnitude). ESHM20 models its sources as points with a default orientation, so no strike and dip are stored; the loss step
+draws a random strike (seeded by the event id) and takes the dip from the rake.
+
+**Event losses** (`eventloss.py`). Each event is a finite rupture on the 1 km exposure, processed in parallel (about 30-50 events per
+second on 12 workers). Losses are accumulated per cell (average annual loss map) and per event (event loss table). Two ground-motion
+models: the ensemble and ESHM20's central branch.
+
+**Metrics** (`riskmetrics.py`). Average annual loss; occurrence (OEP) and aggregate (AEP) exceedance curves from the simulated years
+(Weibull plotting positions) with bootstrap standard errors; only return periods up to a tenth of the simulated years are shown.
+
+**Results of the 20,000-year trial.** Average annual loss USD 194 million (ensemble) and 244 million (ESHM20), +-10 million
+sampling error; 1-in-100 / 500 / 1,000-year loss USD 3.6 / 13.8 / 21.9 billion (ensemble). 93 % of the loss comes from events with an
+epicentre inside Germany; the largest simulated event is an M7.05 in the Upper Rhine Graben (USD 56 billion).
+
+**Consistency check** (`validation/check_event_set.py`). Hazard computed from the event set (full ESHM20 ground-motion tree) matches
+OpenQuake's classical PSHA within about 10 %, and OpenQuake's own ground-motion fields from the same job match its classical result
+within 8 %. The first version overestimated the hazard by 26-53 % because the "Vs30 measured" flag of the ESHM20 Kotha model was set
+wrongly; this was found by the check. Details in validation/README.md.
+
+**Open points.** No comparison with published average annual loss figures or with the historical catalogue; only the central
+ground-motion branch is used in the loss calculation; fatalities are not shown (overestimated); 100,000 simulated years would
+stabilise the tail beyond 1,000 years.
