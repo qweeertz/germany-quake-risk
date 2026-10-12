@@ -298,7 +298,7 @@ const DAMAGE_GRADES = [
   { key: "complete", label: "Complete (> 70 %)", color: "#8f3512" },
 ];
 
-const scenario = { epicentre: null, layer: "mmi" };
+const scenario = { epicentre: null, layer: "mmi", exact: null };  // exact: parameters of an event-set event, until a control is changed
 let marker = null, requestController = null, requestTimer = null;
 
 function applyScenarioColors() {
@@ -345,7 +345,7 @@ function setEpicentre(lon, lat) {
     const el = document.createElement("div");
     el.className = "epi";
     marker = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(scenario.epicentre).addTo(map);
-    marker.on("dragend", () => { const p = marker.getLngLat(); setEpicentre(p.lng, p.lat); });
+    marker.on("dragend", () => { const p = marker.getLngLat(); scenario.exact = null; setEpicentre(p.lng, p.lat); });
   } else marker.setLngLat(scenario.epicentre);
   $("hint").textContent = `Epicentre: ${scenario.epicentre[1].toFixed(2)}° N, ${scenario.epicentre[0].toFixed(2)}° E. Drag the marker or click elsewhere to move it.`;
   scheduleRun();
@@ -357,7 +357,7 @@ async function runScenario() {
   requestController = new AbortController();
   setStatus("Calculating …");
   const body = { lon: scenario.epicentre[0], lat: scenario.epicentre[1], mag: +$("mag").value, depth: +$("depth").value,
-                 strike: +$("strike").value, mechanism: $("mech").value, gmpe: $("gmpe").value };
+                 strike: +$("strike").value, mechanism: $("mech").value, gmpe: $("gmpe").value, ...scenario.exact };
   try {
     const response = await fetch(API + "/api/scenario", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body), signal: requestController.signal });
@@ -427,12 +427,13 @@ function initScenarioControls() {
   };
   Object.keys(outputs).forEach(k => {
     $(k).oninput = refreshOutputs;
-    $(k).onchange = () => { if (scenario.epicentre) scheduleRun(); };
+    $(k).onchange = () => { scenario.exact = null; if (scenario.epicentre) scheduleRun(); };
   });
-  $("mech").onchange = $("gmpe").onchange = () => { if (scenario.epicentre) scheduleRun(); };
+  $("mech").onchange = $("gmpe").onchange = () => { scenario.exact = null; if (scenario.epicentre) scheduleRun(); };
   $("preset").onchange = () => {
     const p = PRESETS.find(x => x[0] === $("preset").value);
     if (!p || !p[0]) return;
+    scenario.exact = null;
     $("mag").value = p[4]; $("depth").value = p[5]; $("strike").value = p[6]; $("mech").value = p[7];
     refreshOutputs();
     setEpicentre(p[2], p[3]);
@@ -441,7 +442,7 @@ function initScenarioControls() {
   $("tabExposure").onclick = () => setMode("exposure");
   $("tabScenario").onclick = () => setMode("scenario");
   $("tabRisk").onclick = () => setMode("risk");
-  map.on("click", e => { if (mode === "scenario") setEpicentre(e.lngLat.lng, e.lngLat.lat); });
+  map.on("click", e => { if (mode === "scenario") { scenario.exact = null; setEpicentre(e.lngLat.lng, e.lngLat.lat); } });
 }
 
 // ===================================================================================================
@@ -483,9 +484,34 @@ function renderRisk() {
   const top = m.by_state.slice().sort((a, b) => b.aal - a.aal).slice(0, 8), max = top[0].aal;
   $("rk-states").innerHTML = top.map(s =>
     `<tr><td class="n">${names[s.state]}</td><td class="b"><div class="bar" style="width:${100 * s.aal / max}%"></div></td><td class="v">${fmtUSD(s.aal)}</td></tr>`).join("");
+  const events = m.top_events;
+  $("rk-events").innerHTML = "<tr><th>#</th><th>M</th><th>Location</th><th>Loss</th></tr>" + events.map((e, i) =>
+    `<tr data-i="${i}" tabindex="0" title="Show this event as a scenario"><td>${i + 1}</td><td>${e.mag.toFixed(2)}</td>` +
+    `<td>${e.state || e.outside_km + " km outside Germany"}</td><td class="v">${fmtUSD(e.loss)}</td></tr>`).join("");
+  $("rk-events").querySelectorAll("tr[data-i]").forEach(tr => {
+    const open = () => showEvent(events[+tr.dataset.i]);
+    tr.onclick = open;
+    tr.onkeydown = ev => { if (ev.key === "Enter") open(); };
+  });
+  $("rk-events-note").textContent = `The ${events.length} largest of ${DATA.risk.events.toLocaleString("en-US")} simulated events ` +
+    `(each is one draw from the model, about once in ${DATA.risk.years.toLocaleString("en-US")} years). The fault direction is random, ` +
+    "so another direction would change the loss. Click a row to see the event as a scenario.";
   $("rk-hint").textContent = `Expected loss per year from ${DATA.risk.years.toLocaleString("en-US")} simulated years of earthquakes ` +
     `(${DATA.risk.events.toLocaleString("en-US")} events near Germany) sampled from the ESHM20 source model. ` +
     "Economic loss only: fatalities are not shown because the vulnerability model overestimates them for Germany.";
+}
+
+function showEvent(e) {
+  scenario.exact = { mag: e.mag, depth: e.depth, strike: e.strike, rake: e.rake, dip: e.dip, gmpe: risk.model };
+  $("mag").value = e.mag; $("depth").value = Math.round(e.depth); $("strike").value = Math.round(e.strike);
+  $("mech").value = e.dip === 90 ? "strike-slip" : e.dip === 60 ? "normal" : "thrust";
+  $("gmpe").value = risk.model;
+  $("preset").value = "";
+  $("mag").dispatchEvent(new Event("input"));
+  $("o-mag").textContent = e.mag.toFixed(2) + (e.mag > MAGNITUDE_REALISTIC_MAX ? " ⚠" : "");
+  setMode("scenario");
+  setEpicentre(e.lon, e.lat);
+  map.flyTo({ center: [e.lon, e.lat], zoom: Math.max(map.getZoom(), 7), duration: 800 });
 }
 
 function initRiskControls() {

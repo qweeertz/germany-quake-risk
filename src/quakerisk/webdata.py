@@ -8,6 +8,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
+from scipy.spatial import cKDTree
 
 from .engine_data import HEX_FILE, HEX_RESOLUTIONS
 from .exposure import NUTS1_TO_ISO
@@ -71,11 +72,25 @@ def _hexagons(cells, resolution, hex_ids):
 
 RISK_EVENT_SET = "es20k"
 RISK_MODELS = ("ensemble", "eshm20")
+TOP_EVENTS = 100  # largest simulated events listed in the dashboard
+
+
+def _top_events(elt, aal):
+    """The largest events of the event loss table with the parameters needed to rerun them as scenarios."""
+    from .eventloss import MIN_DEPTH_KM
+
+    top = elt.nlargest(TOP_EVENTS, "loss")
+    nearest = cKDTree(np.c_[aal.lon, aal.lat]).query(np.c_[top.lon, top.lat])[1]
+    return [{"id": int(e.event_id), "mag": float(e.mag), "lon": float(e.lon),
+             "lat": float(e.lat), "depth": max(float(e.depth), MIN_DEPTH_KM),
+             "strike": float(e.strike), "rake": float(e.rake), "dip": float(e.dip),
+             "state": STATE_NAMES.get(aal.state.iloc[i], ""), "outside_km": round(float(e.km_to_germany)),
+             "loss": float(e.loss)} for e, i in zip(top.itertuples(), nearest)]
 
 
 def _risk(cells, hexagons, ids):
     """Average annual loss per hexagon and state and the exceedance table, for the ground-motion models that were run."""
-    from .eventloss import aal_path
+    from .eventloss import aal_path, elt_path
     from .eventset import read_events
     from .riskmetrics import metrics_path
 
@@ -87,6 +102,7 @@ def _risk(cells, hexagons, ids):
         metrics = json.loads(metrics_path(RISK_EVENT_SET, gmpe).read_text())
         model = {"aal": metrics["aal_usd"], "aal_std_error": metrics["aal_std_error_usd"],
                  "aal_by_occupancy": metrics["aal_by_occupancy_usd"], "return_periods": metrics["return_periods"]}
+        model["top_events"] = _top_events(pd.read_parquet(elt_path(RISK_EVENT_SET, gmpe)), aal)
         by_state = aal.groupby("state").aal.sum()
         model["by_state"] = [{"state": k, "aal": float(v)} for k, v in by_state.items()]
         for resolution in HEX_RESOLUTIONS:

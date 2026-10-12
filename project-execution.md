@@ -167,6 +167,10 @@ OpenQuake's classical PSHA within about 10 %, and OpenQuake's own ground-motion 
 within 8 %. The first version overestimated the hazard by 26-53 % because the "Vs30 measured" flag of the ESHM20 Kotha model was set
 wrongly; this was found by the check. Details in validation/README.md.
 
+**Event list in the dashboard.** The risk tab lists the 100 largest simulated events per ground-motion model. A click loads the
+event into the scenario view with its exact magnitude, depth, strike, rake and dip (the API accepts an optional `rake` and `dip`
+that override the fault type), and the scenario loss equals the event loss table value (tested).
+
 **Open points.** No comparison with published average annual loss figures or with the historical catalogue; only the central
 ground-motion branch is used in the loss calculation; fatalities are not shown (overestimated); 100,000 simulated years would
 stabilise the tail beyond 1,000 years.

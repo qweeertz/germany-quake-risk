@@ -26,3 +26,18 @@ def test_invalid_input_is_rejected(client, payload):
 def test_index_page_is_served(client):
     response = client.get("/")
     assert response.status_code == 200 and "Germany Earthquake Risk" in response.text
+
+
+def test_event_set_event_reproduces_its_table_loss(client):
+    """A scenario with the exact parameters of a listed event gives the loss of the event loss table."""
+    import pandas as pd
+
+    from quakerisk.eventloss import elt_path
+
+    path = elt_path("es20k", "ensemble")
+    if not path.exists():
+        pytest.skip("event losses not computed")
+    e = pd.read_parquet(path).nlargest(1, "loss").iloc[0]
+    body = {"lon": e.lon, "lat": e.lat, "mag": e.mag, "depth": max(e.depth, 3.0), "strike": e.strike, "rake": e.rake,
+            "dip": e.dip, "gmpe": "ensemble"}
+    assert client.post("/api/scenario", json=body).json()["loss_usd"] == pytest.approx(e.loss, rel=1e-6)

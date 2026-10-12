@@ -27,6 +27,8 @@ class Scenario(BaseModel):
     strike: float = Field(default=0.0, ge=0.0, le=360.0)
     mechanism: str = "normal"
     gmpe: str = "ensemble"
+    rake: float | None = Field(default=None, ge=-180.0, le=180.0)  # exact mechanism of an event; overrides `mechanism`
+    dip: float | None = Field(default=None, gt=0.0, le=90.0)
 
 
 def create_app() -> FastAPI:
@@ -40,6 +42,8 @@ def create_app() -> FastAPI:
     def scenario(s: Scenario):
         started = time.time()
         rake, dip = MECHANISMS.get(s.mechanism, MECHANISMS["normal"])
+        if s.rake is not None and s.dip is not None:
+            rake, dip = s.rake, s.dip
         result = engine.run(s.lon, s.lat, s.mag, s.depth, s.strike, dip, rake,
                             gmpe=s.gmpe if s.gmpe in GMPE_CHOICES else "ensemble")
         out = result.summary()

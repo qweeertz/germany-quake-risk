@@ -21,7 +21,8 @@ full OpenQuake engine.
   component, building type and federal state. Six example scenarios are included.
 - **Annual risk.** A stochastic event set of 20,000 simulated years is sampled from the ESHM20 source model with
   OpenQuake and run through the loss engine. The dashboard shows the average annual loss per hexagon and federal
-  state and the loss that is exceeded once in 100, 500 and 1,000 years, for two ground-motion models.
+  state and the loss that is exceeded once in 100, 500 and 1,000 years, for two ground-motion models. A list of the 100
+  largest simulated events opens any of them in the scenario view with its exact parameters.
 - **Command line.** `quakerisk scenario ...` prints the scenario results as JSON; `quakerisk eventset`,
   `eventlosses` and `riskmetrics` run the probabilistic risk pipeline.
 

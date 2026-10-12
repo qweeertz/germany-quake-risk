@@ -89,3 +89,9 @@ select { width: 100%; font: inherit; font-size: 12.5px; padding: 6px 8px; backgr
   aside { border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
   .kpis { grid-template-columns: 1fr 1fr 1fr; }
 }
+
+table.events { margin-top: 6px; }
+table.events th { text-align: left; font-weight: 500; color: var(--ink-2); padding: 2px 4px; }
+table.events td { padding: 3px 4px; }
+table.events tr[data-i] { cursor: pointer; }
+table.events tr[data-i]:hover, table.events tr[data-i]:focus-visible { background: var(--hover, rgba(128,128,128,.15)); outline: none; }
